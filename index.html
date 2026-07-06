@@ -18,10 +18,10 @@
 <style>
   :root {
     --paper: #f2eee4;
-    --ink: #2e2b25;
-    --muted: #8b8172;
-    --faint: rgba(46, 43, 37, 0.10);
-    --gold: #e8a91d;         /* prothonotary yellow, inked down for contrast */
+    --ink: #1c1a15;
+    --muted: #6e6454;
+    --faint: rgba(28, 26, 21, 0.14);
+    --gold: #b57f07;         /* prothonotary yellow, inked down for text contrast */
     --gold-bright: #f3b81f;  /* the bird itself */
     --slate: #7d8aa0;        /* wing gray-blue — also "flat" */
     --flat: #5f7ea6;
@@ -67,23 +67,27 @@
   }
   .wordmark {
     display: flex; align-items: center; gap: 9px;
-    font-size: 15px; letter-spacing: 0.4em; text-transform: uppercase;
+    font-size: 16px; letter-spacing: 0.4em; text-transform: uppercase;
     color: var(--ink); font-weight: 560;
   }
   .wordmark svg { display: block; }
   .a4 {
     display: flex; align-items: center; gap: 2px;
-    font-family: var(--mono); font-size: 13px; color: var(--muted);
+    font-family: var(--mono); font-size: 15px; color: var(--muted);
   }
-  .a4 output { color: var(--ink); min-width: 8.5ch; text-align: center; }
+  .a4 output { color: var(--ink); min-width: 8.5ch; text-align: center; white-space: nowrap; }
   .a4 output b { color: var(--gold); font-weight: 600; }
   .a4 button {
-    width: 34px; height: 34px; border-radius: 50%;
-    background: none; border: 1px solid rgba(46, 43, 37, 0.18);
-    color: var(--muted); font-family: var(--mono); font-size: 16px;
+    width: 38px; height: 38px; border-radius: 50%;
+    background: none; border: 1px solid rgba(28, 26, 21, 0.28);
+    color: var(--muted); font-family: var(--mono); font-size: 18px;
     cursor: pointer; transition: color .15s, border-color .15s;
   }
   .a4 button:active { color: var(--gold); border-color: var(--gold); }
+  @media (max-width: 430px) {
+    .wordmark { font-size: 14px; letter-spacing: 0.26em; }
+    .a4 { font-size: 14px; }
+  }
 
   /* ---- note stage ---- */
   #stage {
@@ -113,14 +117,14 @@
   #app.intune #note .acc, #app.intune #note .oct { color: var(--gold); }
   #app.idle #note { opacity: 0.2; }
   #enharm {
-    height: 20px; margin-top: 6px;
-    font-style: italic; font-size: 14px; color: var(--muted);
+    height: 24px; margin-top: 6px;
+    font-style: italic; font-size: 16px; color: var(--muted);
     opacity: 0.9; transition: opacity .3s;
   }
   #app.idle #enharm { opacity: 0; }
   #readouts {
-    display: flex; gap: 28px; margin-top: 10px;
-    font-family: var(--mono); font-size: 15px; color: var(--muted);
+    display: flex; gap: 28px; margin-top: 12px;
+    font-family: var(--mono); font-size: 18px; color: var(--muted);
     transition: opacity .4s;
   }
   #readouts b { color: var(--ink); font-weight: 400; }
@@ -129,13 +133,24 @@
   #app.intune #cents-read b { color: var(--gold); }
 
   /* ---- canvases ---- */
-  #meter { width: 100%; height: 96px; flex: 0 0 auto; display: block; }
+  #meter { width: 100%; height: 104px; flex: 0 0 auto; display: block; }
   #traceWrap { flex: 1 1 0; min-height: 110px; position: relative; margin-top: 6px; }
   #trace { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 
   footer {
-    padding-top: 8px; text-align: center;
-    font-style: italic; font-size: 12.5px; color: var(--muted); opacity: 0.85;
+    padding-top: 10px; text-align: center;
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+  }
+  #stop {
+    font-family: var(--mono); font-size: 14px; letter-spacing: 0.06em;
+    color: var(--muted); background: none;
+    border: 1px solid rgba(28, 26, 21, 0.3); border-radius: 999px;
+    padding: 9px 24px; cursor: pointer;
+    transition: color .15s, border-color .15s;
+  }
+  #stop:active { color: var(--sharp); border-color: var(--sharp); }
+  footer .hint {
+    font-style: italic; font-size: 14px; color: var(--muted); opacity: 0.85;
   }
 
   /* ---- start overlay ---- */
@@ -155,7 +170,7 @@
     font-size: 44px; font-weight: 340; letter-spacing: 0.02em;
     font-variation-settings: 'opsz' 144;
   }
-  #overlay .tag { font-style: italic; color: var(--muted); font-size: 16px; margin-top: -8px; }
+  #overlay .tag { font-style: italic; color: var(--muted); font-size: 17px; margin-top: -8px; }
   #overlay .rule { width: 72px; height: 1px; background: var(--gold); opacity: 0.6; margin: 8px 0; }
   #start {
     font-family: var(--serif); font-size: 17px; letter-spacing: 0.12em; text-transform: uppercase;
@@ -166,7 +181,7 @@
     transition: transform .15s, box-shadow .3s;
   }
   #start:active { transform: scale(0.97); }
-  #overlay .hint { font-size: 13px; color: var(--muted); max-width: 300px; line-height: 1.5; }
+  #overlay .hint { font-size: 14.5px; color: var(--muted); max-width: 320px; line-height: 1.5; }
   #overlay .err { color: var(--sharp); font-size: 14px; max-width: 320px; line-height: 1.5; display: none; }
 </style>
 </head>
@@ -216,7 +231,10 @@
   <canvas id="meter"></canvas>
   <div id="traceWrap"><canvas id="trace"></canvas></div>
 
-  <footer>in tune within ±5 cents · hold a note and the warbler lands</footer>
+  <footer>
+    <button id="stop">■ stop listening</button>
+    <div class="hint">in tune within ±5 cents · hold a note and the warbler lands</div>
+  </footer>
 </div>
 
 <div id="overlay">
@@ -249,12 +267,17 @@
     err: document.getElementById('err'),
   };
   const IN_TUNE = 5; // cents
+  // Gate hysteresis: starting a note demands a clear signal; continuing one
+  // tolerates the quiet tail (piano decay, iOS gain/noise processing pulling
+  // a steady tone down).
+  const ONSET_GATES = { rmsGate: 0.003, clarityGate: 0.6 };
+  const SUSTAIN_GATES = { rmsGate: 0.0006, clarityGate: 0.5 };
   const A4_MIN = 415, A4_MAX = 466;
   let a4 = parseInt(localStorage.getItem('warbler.a4') || localStorage.getItem('fermata.a4'), 10) || 440;
   a4 = Math.min(A4_MAX, Math.max(A4_MIN, a4));
 
   let ctx = null, analyser = null, detector = null, timeBuf = null, micStream = null;
-  let debugNodes = null, wakeLock = null;
+  let debugNodes = null, wakeLock = null, running = false;
 
   // Recent raw detections for median smoothing.
   const recent = [];              // exact midi values, newest last
@@ -270,16 +293,16 @@
 
   // Canvas ink (light field-guide theme).
   const C = {
-    tickMinor: 'rgba(46,43,37,0.18)',
-    tickMajor: 'rgba(46,43,37,0.45)',
-    label: 'rgba(46,43,37,0.45)',
-    labelDim: 'rgba(46,43,37,0.28)',
-    grid: 'rgba(46,43,37,0.055)',
-    gridC: 'rgba(46,43,37,0.14)',
-    gridCur: 'rgba(232,169,29,0.4)',
-    zone: 'rgba(232,169,29,0.12)',
-    trace: 'rgba(46,43,37,0.5)',
-    traceGold: 'rgba(217,152,14,0.95)',
+    tickMinor: 'rgba(28,26,21,0.3)',
+    tickMajor: 'rgba(28,26,21,0.65)',
+    label: 'rgba(28,26,21,0.65)',
+    labelDim: 'rgba(28,26,21,0.42)',
+    grid: 'rgba(28,26,21,0.07)',
+    gridC: 'rgba(28,26,21,0.18)',
+    gridCur: 'rgba(181,127,7,0.5)',
+    zone: 'rgba(232,169,29,0.14)',
+    trace: 'rgba(28,26,21,0.7)',
+    traceGold: 'rgba(181,127,7,0.95)',
   };
 
   // ---------- A4 reference ----------
@@ -323,6 +346,12 @@
       els.err.style.display = 'block';
       return;
     }
+    // iOS sometimes ignores constraints passed to getUserMedia; asking the
+    // live track again improves the odds of raw, unsuppressed audio.
+    const track = micStream.getAudioTracks()[0];
+    if (track && track.applyConstraints) {
+      track.applyConstraints({ echoCancellation: false, noiseSuppression: false, autoGainControl: false }).catch(() => {});
+    }
     ctx = new (window.AudioContext || window.webkitAudioContext)();
     await ctx.resume();
     analyser = ctx.createAnalyser();
@@ -333,16 +362,35 @@
     detector = Pitch.createDetector(analyser.fftSize, ctx.sampleRate);
     els.overlay.classList.add('gone');
     requestWakeLock();
+    running = true;
     requestAnimationFrame(frame);
   }
   document.getElementById('start').addEventListener('click', start);
+
+  function stop() {
+    running = false;
+    if (debugNodes) { debugNodes.osc.stop(); debugNodes.gain.disconnect(); debugNodes = null; }
+    if (micStream) { micStream.getTracks().forEach((t) => t.stop()); micStream = null; }
+    if (ctx) { ctx.close().catch(() => {}); ctx = null; }
+    analyser = null; detector = null; timeBuf = null;
+    if (wakeLock) { wakeLock.release().catch(() => {}); wakeLock = null; }
+    recent.length = 0; history.length = 0;
+    displayedMidi = null; smoothCents = 0; lastVoiced = 0; inTuneSince = 0;
+    app.classList.add('idle');
+    app.classList.remove('intune');
+    els.hold.classList.remove('earned');
+    meterG.clearRect(0, 0, meterR.width, meterR.height);
+    traceG.clearRect(0, 0, traceR.width, traceR.height);
+    els.overlay.classList.remove('gone');
+  }
+  document.getElementById('stop').addEventListener('click', stop);
 
   async function requestWakeLock() {
     try { if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen'); }
     catch (e) { /* not critical */ }
   }
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible' && ctx) {
+    if (document.visibilityState === 'visible' && ctx && running) {
       ctx.resume();
       requestWakeLock();
     }
@@ -355,8 +403,10 @@
   }
 
   function frame(now) {
+    if (!running) return;
     analyser.getFloatTimeDomainData(timeBuf);
-    const r = detector.detect(timeBuf);
+    const tracking = now - lastVoiced < 750;
+    const r = detector.detect(timeBuf, tracking ? SUSTAIN_GATES : ONSET_GATES);
 
     if (r) {
       const exact = Pitch.freqToMidi(r.frequency, a4);
@@ -444,7 +494,7 @@
     g.beginPath(); g.moveTo(x0, base); g.lineTo(x1, base); g.stroke();
 
     // ticks
-    g.font = '10px ' + getCSS('--mono');
+    g.font = '12px ' + getCSS('--mono');
     g.textAlign = 'center';
     for (let c = -50; c <= 50; c += 5) {
       const major = c % 25 === 0;
@@ -456,7 +506,7 @@
       g.beginPath(); g.moveTo(x, base); g.lineTo(x, base - h); g.stroke();
       if (major) {
         g.fillStyle = c === 0 ? getCSS('--gold') : C.label;
-        g.fillText(c === 0 ? '0' : (c > 0 ? '+' + c : String(c)), x, base + 16);
+        g.fillText(c === 0 ? '0' : (c > 0 ? '+' + c : String(c)), x, base + 18);
       }
     }
 
@@ -495,7 +545,7 @@
     const yOf = (midi) => H / 2 - (midi - camMidi) * pxPerSemi;
 
     // Semitone gridlines with note labels down the left edge.
-    g.font = '9.5px ' + getCSS('--mono');
+    g.font = '12px ' + getCSS('--mono');
     g.textAlign = 'left'; g.textBaseline = 'middle';
     const lo = Math.floor(camMidi - H / 2 / pxPerSemi), hi = Math.ceil(camMidi + H / 2 / pxPerSemi);
     for (let m = lo; m <= hi; m++) {
@@ -505,7 +555,7 @@
       const name = Pitch.NOTE_NAMES[((m % 12) + 12) % 12];
       g.strokeStyle = cur ? C.gridCur : name === 'C' ? C.gridC : C.grid;
       g.lineWidth = 1;
-      g.beginPath(); g.moveTo(30, y); g.lineTo(W, y); g.stroke();
+      g.beginPath(); g.moveTo(38, y); g.lineTo(W, y); g.stroke();
       g.fillStyle = cur ? getCSS('--gold') : name === 'C' ? C.label : C.labelDim;
       g.fillText(name + (Math.floor(m / 12) - 1), 2, y);
     }
@@ -513,7 +563,7 @@
     // Pitch trace: gold while in tune, ink otherwise; broken across silences.
     if (history.length > 1) {
       g.save();
-      g.beginPath(); g.rect(28, 0, W - 28, H); g.clip();
+      g.beginPath(); g.rect(36, 0, W - 36, H); g.clip();
       g.lineWidth = 2; g.lineJoin = 'round'; g.lineCap = 'round';
       let prev = null;
       for (let i = 0; i < history.length; i++) {
@@ -537,10 +587,20 @@
     }
   }
 
+  // Signal diagnostics from the console: __stats() → level/clarity of the
+  // last analysis frame. Helps debug "why isn't it hearing me" on a phone.
+  window.__stats = function () {
+    if (!detector) return null;
+    const settings = micStream && micStream.getAudioTracks()[0] && micStream.getAudioTracks()[0].getSettings
+      ? micStream.getAudioTracks()[0].getSettings() : null;
+    return { rms: detector.lastRms, clarity: detector.lastClarity, trackSettings: settings };
+  };
+
   // ---------- debug hook (no UI): feed a synthetic tone instead of the mic ----------
   // In DevTools: __tone(442) starts a flute-ish tone, __tone(0) stops it.
-  // Works without a microphone: bootstraps the audio graph if needed.
-  window.__tone = function (freq, profile) {
+  // Optional: __tone(freq, harmonicAmps, gain). Works without a microphone:
+  // bootstraps the audio graph if needed.
+  window.__tone = function (freq, profile, level) {
     if (debugNodes) { debugNodes.osc.stop(); debugNodes.gain.disconnect(); debugNodes = null; }
     if (!freq) return;
     if (!ctx) {
@@ -552,6 +612,7 @@
       timeBuf = new Float32Array(analyser.fftSize);
       detector = Pitch.createDetector(analyser.fftSize, ctx.sampleRate);
       els.overlay.classList.add('gone');
+      running = true;
       requestAnimationFrame(frame);
     }
     const amps = profile || [1, 0.35, 0.12, 0.04];
@@ -562,7 +623,7 @@
     osc.setPeriodicWave(ctx.createPeriodicWave(real, imag, { disableNormalization: false }));
     osc.frequency.value = freq;
     const gain = ctx.createGain();
-    gain.gain.value = 0.25;
+    gain.gain.value = level !== undefined ? level : 0.25;
     osc.connect(gain); gain.connect(analyser);
     osc.start();
     debugNodes = { osc, gain };

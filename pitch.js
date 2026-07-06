@@ -86,13 +86,23 @@
     /**
      * Detect pitch in a Float32Array/Float64Array of length windowSize.
      * Returns { frequency, clarity, rms } or null when no reliable pitch.
+     *
+     * `gates` optionally overrides { rmsGate, clarityGate } per call — used
+     * for hysteresis: a quiet decaying/suppressed tail of a note that is
+     * already being tracked should not be dropped by the onset-level gate.
      */
-    function detect(buf) {
+    function detect(buf, gates) {
+      const rmsGate = gates && gates.rmsGate !== undefined ? gates.rmsGate
+        : opts.rmsGate !== undefined ? opts.rmsGate : 0.0025;
+      const clarityGate = gates && gates.clarityGate !== undefined ? gates.clarityGate
+        : opts.clarityGate !== undefined ? opts.clarityGate : 0.6;
+
       // RMS gate: don't chase noise in silence.
       let sq = 0;
       for (let i = 0; i < n; i++) sq += buf[i] * buf[i];
       const rms = Math.sqrt(sq / n);
-      if (rms < (opts.rmsGate !== undefined ? opts.rmsGate : 0.004)) {
+      api.lastRms = rms; api.lastClarity = null;
+      if (rms < rmsGate) {
         return null;
       }
 
@@ -150,7 +160,8 @@
           if (p.val > bestVal) bestVal = p.val;
         }
       }
-      if (bestVal < (opts.clarityGate !== undefined ? opts.clarityGate : 0.6)) {
+      api.lastClarity = bestVal;
+      if (bestVal < clarityGate) {
         return null;
       }
 
@@ -165,7 +176,8 @@
       return { frequency, clarity: Math.min(1, chosen.val), rms };
     }
 
-    return { detect, windowSize: n, sampleRate };
+    const api = { detect, windowSize: n, sampleRate, lastRms: 0, lastClarity: null };
+    return api;
   }
 
   // ---- Note math ------------------------------------------------------------

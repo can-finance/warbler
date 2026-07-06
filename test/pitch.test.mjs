@@ -71,6 +71,18 @@ for (const f of [100, 442, 1000, 3000]) check('sine', f, SINE, f > 2000 ? 10 : 5
 // Off-center pitches (detuned) must report accurate frequency, not snap.
 for (const f of [443.7, 259.1, 891.2]) check('detuned', f, FLUTE, 5);
 
+// Gate hysteresis: a very quiet sustained tone (decayed piano, iOS-suppressed
+// steady tone) is rejected by onset-level gates but tracked with sustain gates.
+{
+  const quiet = tone(442, FLUTE, 0.0005);
+  for (let i = 0; i < quiet.length; i++) quiet[i] *= 0.004; // rms ≈ 0.0008
+  if (detector.detect(quiet) === null) pass++;
+  else { console.log('FAIL quiet tone passed onset gate'); fail++; }
+  const r = detector.detect(quiet, { rmsGate: 0.0006, clarityGate: 0.5 });
+  if (r && Math.abs(centsOff(r.frequency, 442)) <= 5) pass++;
+  else { console.log('FAIL quiet tone under sustain gates:', r && r.frequency); fail++; }
+}
+
 // Silence and pure noise must return null.
 {
   const silence = new Float32Array(N);

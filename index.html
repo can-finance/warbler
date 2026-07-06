@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Warbler — flute &amp; piano tuner</title>
+<meta name="description" content="A pitch detector and tuner for flute and piano.">
+<meta name="theme-color" content="#f2eee4">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" href="./icon-192.png">
+<link rel="apple-touch-icon" href="./apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Warbler">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,340;0,9..144,560;1,9..144,340&family=IBM+Plex+Mono:wght@400;600&display=swap">
+<style>
+  :root {
+    --paper: #f2eee4;
+    --ink: #2e2b25;
+    --muted: #8b8172;
+    --faint: rgba(46, 43, 37, 0.10);
+    --gold: #e8a91d;         /* prothonotary yellow, inked down for contrast */
+    --gold-bright: #f3b81f;  /* the bird itself */
+    --slate: #7d8aa0;        /* wing gray-blue — also "flat" */
+    --flat: #5f7ea6;
+    --sharp: #c05f3c;
+    --serif: 'Fraunces', 'Iowan Old Style', Georgia, serif;
+    --mono: 'IBM Plex Mono', ui-monospace, Menlo, Consolas, monospace;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--serif);
+    overflow: hidden;
+    -webkit-user-select: none; user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  /* Field-guide paper: cool sky wash above, warm vignette below, grain. */
+  body::before {
+    content: ''; position: fixed; inset: 0; z-index: 0; pointer-events: none;
+    background:
+      radial-gradient(120% 55% at 50% -10%, rgba(125, 138, 160, 0.16), transparent 60%),
+      radial-gradient(140% 90% at 50% 115%, rgba(139, 129, 114, 0.18), transparent 55%);
+  }
+  body::after {
+    content: ''; position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: 0.045;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  #app {
+    position: relative; z-index: 1;
+    height: 100dvh;
+    max-width: 680px; margin: 0 auto;
+    display: flex; flex-direction: column;
+    padding: calc(env(safe-area-inset-top) + 14px) 20px calc(env(safe-area-inset-bottom) + 10px);
+  }
+
+  /* ---- header ---- */
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--faint);
+  }
+  .wordmark {
+    display: flex; align-items: center; gap: 9px;
+    font-size: 15px; letter-spacing: 0.4em; text-transform: uppercase;
+    color: var(--ink); font-weight: 560;
+  }
+  .wordmark svg { display: block; }
+  .a4 {
+    display: flex; align-items: center; gap: 2px;
+    font-family: var(--mono); font-size: 13px; color: var(--muted);
+  }
+  .a4 output { color: var(--ink); min-width: 8.5ch; text-align: center; }
+  .a4 output b { color: var(--gold); font-weight: 600; }
+  .a4 button {
+    width: 34px; height: 34px; border-radius: 50%;
+    background: none; border: 1px solid rgba(46, 43, 37, 0.18);
+    color: var(--muted); font-family: var(--mono); font-size: 16px;
+    cursor: pointer; transition: color .15s, border-color .15s;
+  }
+  .a4 button:active { color: var(--gold); border-color: var(--gold); }
+
+  /* ---- note stage ---- */
+  #stage {
+    flex: 0 0 auto;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: 12px 0 4px;
+    min-height: 220px;
+    position: relative;
+  }
+  #hold {
+    height: 30px; margin-bottom: -6px;
+    opacity: 0; transform: translateY(7px);
+    transition: opacity .5s, transform .5s;
+  }
+  #hold.earned { opacity: 1; transform: none; }
+  #note {
+    font-size: clamp(96px, 26vh, 150px);
+    font-weight: 340; line-height: 0.95;
+    font-variation-settings: 'opsz' 144;
+    display: flex; align-items: baseline;
+    transition: color .3s, text-shadow .5s, opacity .4s;
+    text-shadow: 0 0 0 transparent;
+  }
+  #note .acc { font-size: 0.42em; align-self: flex-start; margin: 0.28em 0 0 0.04em; color: var(--muted); transition: color .3s; }
+  #note .oct { font-size: 0.32em; color: var(--muted); font-family: var(--mono); font-weight: 400; margin-left: 0.12em; transition: color .3s; }
+  #app.intune #note { color: var(--gold); text-shadow: 0 0 34px rgba(243, 184, 31, 0.4); }
+  #app.intune #note .acc, #app.intune #note .oct { color: var(--gold); }
+  #app.idle #note { opacity: 0.2; }
+  #enharm {
+    height: 20px; margin-top: 6px;
+    font-style: italic; font-size: 14px; color: var(--muted);
+    opacity: 0.9; transition: opacity .3s;
+  }
+  #app.idle #enharm { opacity: 0; }
+  #readouts {
+    display: flex; gap: 28px; margin-top: 10px;
+    font-family: var(--mono); font-size: 15px; color: var(--muted);
+    transition: opacity .4s;
+  }
+  #readouts b { color: var(--ink); font-weight: 400; }
+  #app.idle #readouts { opacity: 0.35; }
+  #cents-read b { transition: color .2s; }
+  #app.intune #cents-read b { color: var(--gold); }
+
+  /* ---- canvases ---- */
+  #meter { width: 100%; height: 96px; flex: 0 0 auto; display: block; }
+  #traceWrap { flex: 1 1 0; min-height: 110px; position: relative; margin-top: 6px; }
+  #trace { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+
+  footer {
+    padding-top: 8px; text-align: center;
+    font-style: italic; font-size: 12.5px; color: var(--muted); opacity: 0.85;
+  }
+
+  /* ---- start overlay ---- */
+  #overlay {
+    position: fixed; inset: 0; z-index: 10;
+    background: var(--paper);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 18px; padding: 32px; text-align: center;
+    transition: opacity .6s;
+  }
+  #overlay::before {
+    content: ''; position: absolute; inset: 0; pointer-events: none;
+    background: radial-gradient(90% 50% at 50% 0%, rgba(125, 138, 160, 0.18), transparent 65%);
+  }
+  #overlay.gone { opacity: 0; pointer-events: none; }
+  #overlay h1 {
+    font-size: 44px; font-weight: 340; letter-spacing: 0.02em;
+    font-variation-settings: 'opsz' 144;
+  }
+  #overlay .tag { font-style: italic; color: var(--muted); font-size: 16px; margin-top: -8px; }
+  #overlay .rule { width: 72px; height: 1px; background: var(--gold); opacity: 0.6; margin: 8px 0; }
+  #start {
+    font-family: var(--serif); font-size: 17px; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--ink); background: linear-gradient(160deg, #f7c433, var(--gold-bright));
+    border: none; border-radius: 999px; padding: 16px 40px;
+    cursor: pointer; font-weight: 560;
+    box-shadow: 0 6px 28px rgba(232, 169, 29, 0.35);
+    transition: transform .15s, box-shadow .3s;
+  }
+  #start:active { transform: scale(0.97); }
+  #overlay .hint { font-size: 13px; color: var(--muted); max-width: 300px; line-height: 1.5; }
+  #overlay .err { color: var(--sharp); font-size: 14px; max-width: 320px; line-height: 1.5; display: none; }
+</style>
+</head>
+<body>
+<!-- The warbler, three sizes. Defined once, stamped with <use>. -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <g id="bird">
+      <path d="M2 27.5 H30" stroke="#8b8172" stroke-width="1.6" stroke-linecap="round" fill="none"/>
+      <path d="M14.5 23 L14 27.5 M18.5 23.2 L19 27.5" stroke="#3a362e" stroke-width="1.2" stroke-linecap="round" fill="none"/>
+      <path d="M8 16 L1.5 21.5 L4 23.5 L9.5 19 Z" fill="#7d8aa0"/>
+      <ellipse cx="15.5" cy="16" rx="9" ry="7.5" fill="#f3b81f"/>
+      <circle cx="21.5" cy="8.5" r="5.5" fill="#f3b81f"/>
+      <path d="M14 13 Q18 8 24 11 L23 16 Z" fill="#f3b81f"/>
+      <ellipse cx="13" cy="15.5" rx="6.5" ry="4" fill="#7d8aa0" transform="rotate(-24 13 15.5)"/>
+      <path d="M26.5 7.5 L31 9 L26.5 10.6 Z" fill="#3a362e"/>
+      <circle cx="23.6" cy="7.6" r="1" fill="#2e2b25"/>
+    </g>
+  </defs>
+</svg>
+
+<div id="app" class="idle">
+  <header>
+    <div class="wordmark">
+      <svg width="24" height="22" viewBox="0 0 32 30" aria-hidden="true"><use href="#bird"/></svg>
+      Warbler
+    </div>
+    <div class="a4">
+      <button id="a4down" aria-label="Lower reference pitch">&minus;</button>
+      <output id="a4out">A₄ = <b>440</b> Hz</output>
+      <button id="a4up" aria-label="Raise reference pitch">+</button>
+    </div>
+  </header>
+
+  <section id="stage">
+    <div id="hold" title="Held in tune — the warbler landed">
+      <svg width="32" height="30" viewBox="0 0 32 30" aria-hidden="true"><use href="#bird"/></svg>
+    </div>
+    <div id="note"><span class="letter">A</span><span class="acc"></span><span class="oct">4</span></div>
+    <div id="enharm"></div>
+    <div id="readouts">
+      <span id="cents-read"><b>+0</b> ¢</span>
+      <span id="freq-read"><b>440.00</b> Hz</span>
+    </div>
+  </section>
+
+  <canvas id="meter"></canvas>
+  <div id="traceWrap"><canvas id="trace"></canvas></div>
+
+  <footer>in tune within ±5 cents · hold a note and the warbler lands</footer>
+</div>
+
+<div id="overlay">
+  <svg width="96" height="90" viewBox="0 0 32 30" aria-hidden="true"><use href="#bird"/></svg>
+  <h1>Warbler</h1>
+  <div class="tag">a tuner for flute &amp; piano</div>
+  <div class="rule"></div>
+  <button id="start">Begin listening</button>
+  <div class="hint">Warbler needs your microphone — audio is analyzed on your device and never leaves it.</div>
+  <div class="err" id="err"></div>
+</div>
+
+<script src="./pitch.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  // ---------- state ----------
+  const app = document.getElementById('app');
+  const els = {
+    letter: document.querySelector('#note .letter'),
+    acc: document.querySelector('#note .acc'),
+    oct: document.querySelector('#note .oct'),
+    enharm: document.getElementById('enharm'),
+    cents: document.querySelector('#cents-read b'),
+    freq: document.querySelector('#freq-read b'),
+    hold: document.getElementById('hold'),
+    a4out: document.querySelector('#a4out b'),
+    overlay: document.getElementById('overlay'),
+    err: document.getElementById('err'),
+  };
+  const IN_TUNE = 5; // cents
+  const A4_MIN = 415, A4_MAX = 466;
+  let a4 = parseInt(localStorage.getItem('warbler.a4') || localStorage.getItem('fermata.a4'), 10) || 440;
+  a4 = Math.min(A4_MAX, Math.max(A4_MIN, a4));
+
+  let ctx = null, analyser = null, detector = null, timeBuf = null, micStream = null;
+  let debugNodes = null, wakeLock = null;
+
+  // Recent raw detections for median smoothing.
+  const recent = [];              // exact midi values, newest last
+  const history = [];             // { t, midi, inTune } for the trace
+  const TRACE_MS = 9000;
+  let displayedMidi = null;       // integer midi currently shown
+  let smoothCents = 0;            // needle position (smoothed)
+  let lastVoiced = 0;             // last timestamp with a detection
+  let inTuneSince = 0;            // for the "warbler lands" reward
+  let camMidi = 69;               // trace camera center (smoothed)
+
+  const FLAT_OF = { 'C#': 'D♭', 'D#': 'E♭', 'F#': 'G♭', 'G#': 'A♭', 'A#': 'B♭' };
+
+  // Canvas ink (light field-guide theme).
+  const C = {
+    tickMinor: 'rgba(46,43,37,0.18)',
+    tickMajor: 'rgba(46,43,37,0.45)',
+    label: 'rgba(46,43,37,0.45)',
+    labelDim: 'rgba(46,43,37,0.28)',
+    grid: 'rgba(46,43,37,0.055)',
+    gridC: 'rgba(46,43,37,0.14)',
+    gridCur: 'rgba(232,169,29,0.4)',
+    zone: 'rgba(232,169,29,0.12)',
+    trace: 'rgba(46,43,37,0.5)',
+    traceGold: 'rgba(217,152,14,0.95)',
+  };
+
+  // ---------- A4 reference ----------
+  function renderA4() {
+    els.a4out.textContent = String(a4);
+    localStorage.setItem('warbler.a4', String(a4));
+  }
+  document.getElementById('a4down').addEventListener('click', () => { if (a4 > A4_MIN) { a4--; renderA4(); } });
+  document.getElementById('a4up').addEventListener('click', () => { if (a4 < A4_MAX) { a4++; renderA4(); } });
+  renderA4();
+
+  // ---------- canvases ----------
+  const meterC = document.getElementById('meter');
+  const traceC = document.getElementById('trace');
+  const meterG = meterC.getContext('2d');
+  const traceG = traceC.getContext('2d');
+  function fitCanvas(c) {
+    const dpr = Math.min(2.5, window.devicePixelRatio || 1);
+    const r = c.getBoundingClientRect();
+    c.width = Math.max(1, Math.round(r.width * dpr));
+    c.height = Math.max(1, Math.round(r.height * dpr));
+    c.getContext('2d').setTransform(dpr, 0, 0, dpr, 0, 0);
+    return r;
+  }
+  let meterR, traceR;
+  function layout() { meterR = fitCanvas(meterC); traceR = fitCanvas(traceC); }
+  window.addEventListener('resize', layout);
+  layout();
+
+  // ---------- audio ----------
+  async function start() {
+    els.err.style.display = 'none';
+    try {
+      micStream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+      });
+    } catch (e) {
+      els.err.textContent = 'Microphone unavailable: ' + (e && e.name === 'NotAllowedError'
+        ? 'permission was denied. Allow microphone access for this site in your browser settings, then try again.'
+        : (e.message || e));
+      els.err.style.display = 'block';
+      return;
+    }
+    ctx = new (window.AudioContext || window.webkitAudioContext)();
+    await ctx.resume();
+    analyser = ctx.createAnalyser();
+    analyser.fftSize = 4096;
+    analyser.smoothingTimeConstant = 0;
+    ctx.createMediaStreamSource(micStream).connect(analyser);
+    timeBuf = new Float32Array(analyser.fftSize);
+    detector = Pitch.createDetector(analyser.fftSize, ctx.sampleRate);
+    els.overlay.classList.add('gone');
+    requestWakeLock();
+    requestAnimationFrame(frame);
+  }
+  document.getElementById('start').addEventListener('click', start);
+
+  async function requestWakeLock() {
+    try { if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen'); }
+    catch (e) { /* not critical */ }
+  }
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && ctx) {
+      ctx.resume();
+      requestWakeLock();
+    }
+  });
+
+  // ---------- per-frame ----------
+  function median(arr) {
+    const s = arr.slice().sort((x, y) => x - y);
+    return s[s.length >> 1];
+  }
+
+  function frame(now) {
+    analyser.getFloatTimeDomainData(timeBuf);
+    const r = detector.detect(timeBuf);
+
+    if (r) {
+      const exact = Pitch.freqToMidi(r.frequency, a4);
+      recent.push(exact);
+      if (recent.length > 5) recent.shift();
+      const med = median(recent);
+      const nearest = Math.round(med);
+
+      // Switch the displayed note only when the median agrees — kills flicker.
+      if (nearest !== displayedMidi) {
+        displayedMidi = nearest;
+        smoothCents = (med - nearest) * 100;
+        renderNote(nearest);
+      }
+      const cents = Math.max(-60, Math.min(60, (med - displayedMidi) * 100));
+      smoothCents += (cents - smoothCents) * 0.3;
+      lastVoiced = now;
+
+      const inTune = Math.abs(cents) <= IN_TUNE;
+      app.classList.toggle('intune', inTune);
+      app.classList.remove('idle');
+      if (inTune) {
+        if (!inTuneSince) inTuneSince = now;
+        els.hold.classList.toggle('earned', now - inTuneSince > 1500);
+      } else {
+        inTuneSince = 0;
+        els.hold.classList.remove('earned');
+      }
+
+      const cr = Math.round(cents);
+      els.cents.textContent = cr === 0 ? '0' : (cr > 0 ? '+' : '−') + Math.abs(cr);
+      els.freq.textContent = r.frequency.toFixed(r.frequency < 1000 ? 2 : 1);
+      history.push({ t: now, midi: exact, inTune });
+    } else {
+      recent.length = 0;
+      if (now - lastVoiced > 500) {
+        app.classList.add('idle');
+        app.classList.remove('intune');
+        inTuneSince = 0;
+        els.hold.classList.remove('earned');
+        smoothCents += (0 - smoothCents) * 0.08;
+      }
+    }
+    while (history.length && history[0].t < now - TRACE_MS) history.shift();
+
+    drawMeter(now);
+    drawTrace(now);
+    requestAnimationFrame(frame);
+  }
+
+  function renderNote(midi) {
+    const name = Pitch.NOTE_NAMES[((midi % 12) + 12) % 12];
+    const octave = Math.floor(midi / 12) - 1;
+    els.letter.textContent = name[0];
+    els.acc.textContent = name.length > 1 ? '♯' : '';
+    els.oct.textContent = String(octave);
+    els.enharm.textContent = FLAT_OF[name] ? '= ' + FLAT_OF[name] + octave : '';
+  }
+
+  // ---------- meter: engraved ruler on paper ----------
+  const cssCache = {};
+  function getCSS(name) {
+    if (!cssCache[name]) cssCache[name] = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    return cssCache[name];
+  }
+  function meterColor(cents) {
+    if (Math.abs(cents) <= IN_TUNE) return getCSS('--gold');
+    return cents > 0 ? getCSS('--sharp') : getCSS('--flat');
+  }
+
+  function drawMeter(now) {
+    const W = meterR.width, H = meterR.height;
+    const g = meterG;
+    g.clearRect(0, 0, W, H);
+    const idle = now - lastVoiced > 500;
+    g.globalAlpha = idle ? 0.35 : 1;
+
+    const pad = 26, base = H - 30;
+    const x0 = pad, x1 = W - pad;
+    const xOf = (c) => x0 + ((c + 50) / 100) * (x1 - x0);
+
+    // baseline
+    g.strokeStyle = getCSS('--faint');
+    g.lineWidth = 1;
+    g.beginPath(); g.moveTo(x0, base); g.lineTo(x1, base); g.stroke();
+
+    // ticks
+    g.font = '10px ' + getCSS('--mono');
+    g.textAlign = 'center';
+    for (let c = -50; c <= 50; c += 5) {
+      const major = c % 25 === 0;
+      const x = xOf(c);
+      g.strokeStyle = major ? C.tickMajor : C.tickMinor;
+      g.lineWidth = c === 0 ? 1.6 : 1;
+      if (c === 0) g.strokeStyle = getCSS('--gold');
+      const h = c === 0 ? 22 : major ? 15 : 8;
+      g.beginPath(); g.moveTo(x, base); g.lineTo(x, base - h); g.stroke();
+      if (major) {
+        g.fillStyle = c === 0 ? getCSS('--gold') : C.label;
+        g.fillText(c === 0 ? '0' : (c > 0 ? '+' + c : String(c)), x, base + 16);
+      }
+    }
+
+    // in-tune zone shading
+    g.fillStyle = C.zone;
+    g.fillRect(xOf(-IN_TUNE), base - 26, xOf(IN_TUNE) - xOf(-IN_TUNE), 26);
+
+    // needle
+    const c = Math.max(-52, Math.min(52, smoothCents));
+    const x = xOf(Math.max(-50, Math.min(50, c)));
+    const col = meterColor(c);
+    g.strokeStyle = col; g.fillStyle = col;
+    g.lineWidth = 2;
+    g.beginPath(); g.moveTo(x, base - 2); g.lineTo(x, base - 34); g.stroke();
+    g.beginPath();
+    g.moveTo(x, base - 44); g.lineTo(x - 5, base - 34); g.lineTo(x + 5, base - 34);
+    g.closePath(); g.fill();
+    if (Math.abs(c) <= IN_TUNE && !idle) {
+      g.shadowColor = col; g.shadowBlur = 12;
+      g.beginPath(); g.arc(x, base - 44, 2.5, 0, 7); g.fill();
+      g.shadowBlur = 0;
+    }
+    g.globalAlpha = 1;
+  }
+
+  // ---------- trace: scrolling pitch line in semitone space ----------
+  function drawTrace(now) {
+    const W = traceR.width, H = traceR.height;
+    const g = traceG;
+    g.clearRect(0, 0, W, H);
+    const pxPerSemi = Math.max(11, H / 13);
+
+    // Camera follows the median of the last second of pitch.
+    const lastSec = history.filter((h) => h.t > now - 1000).map((h) => h.midi);
+    if (lastSec.length) camMidi += (median(lastSec) - camMidi) * 0.06;
+    const yOf = (midi) => H / 2 - (midi - camMidi) * pxPerSemi;
+
+    // Semitone gridlines with note labels down the left edge.
+    g.font = '9.5px ' + getCSS('--mono');
+    g.textAlign = 'left'; g.textBaseline = 'middle';
+    const lo = Math.floor(camMidi - H / 2 / pxPerSemi), hi = Math.ceil(camMidi + H / 2 / pxPerSemi);
+    for (let m = lo; m <= hi; m++) {
+      const y = yOf(m);
+      if (y < 4 || y > H - 4) continue;
+      const cur = m === displayedMidi && now - lastVoiced < 500;
+      const name = Pitch.NOTE_NAMES[((m % 12) + 12) % 12];
+      g.strokeStyle = cur ? C.gridCur : name === 'C' ? C.gridC : C.grid;
+      g.lineWidth = 1;
+      g.beginPath(); g.moveTo(30, y); g.lineTo(W, y); g.stroke();
+      g.fillStyle = cur ? getCSS('--gold') : name === 'C' ? C.label : C.labelDim;
+      g.fillText(name + (Math.floor(m / 12) - 1), 2, y);
+    }
+
+    // Pitch trace: gold while in tune, ink otherwise; broken across silences.
+    if (history.length > 1) {
+      g.save();
+      g.beginPath(); g.rect(28, 0, W - 28, H); g.clip();
+      g.lineWidth = 2; g.lineJoin = 'round'; g.lineCap = 'round';
+      let prev = null;
+      for (let i = 0; i < history.length; i++) {
+        const h = history[i];
+        const x = W - ((now - h.t) / TRACE_MS) * W;
+        const y = yOf(h.midi);
+        if (prev && h.t - prev.t < 160) {
+          g.strokeStyle = h.inTune ? C.traceGold : C.trace;
+          g.beginPath(); g.moveTo(prev.x, prev.y); g.lineTo(x, y); g.stroke();
+        }
+        prev = { x, y, t: h.t };
+      }
+      // glowing head
+      if (prev && now - lastVoiced < 200) {
+        g.fillStyle = getCSS('--gold-bright');
+        g.shadowColor = getCSS('--gold'); g.shadowBlur = 9;
+        g.beginPath(); g.arc(prev.x, prev.y, 3, 0, 7); g.fill();
+        g.shadowBlur = 0;
+      }
+      g.restore();
+    }
+  }
+
+  // ---------- debug hook (no UI): feed a synthetic tone instead of the mic ----------
+  // In DevTools: __tone(442) starts a flute-ish tone, __tone(0) stops it.
+  // Works without a microphone: bootstraps the audio graph if needed.
+  window.__tone = function (freq, profile) {
+    if (debugNodes) { debugNodes.osc.stop(); debugNodes.gain.disconnect(); debugNodes = null; }
+    if (!freq) return;
+    if (!ctx) {
+      ctx = new (window.AudioContext || window.webkitAudioContext)();
+      ctx.resume();
+      analyser = ctx.createAnalyser();
+      analyser.fftSize = 4096;
+      analyser.smoothingTimeConstant = 0;
+      timeBuf = new Float32Array(analyser.fftSize);
+      detector = Pitch.createDetector(analyser.fftSize, ctx.sampleRate);
+      els.overlay.classList.add('gone');
+      requestAnimationFrame(frame);
+    }
+    const amps = profile || [1, 0.35, 0.12, 0.04];
+    const real = new Float32Array(amps.length + 1);
+    const imag = new Float32Array(amps.length + 1);
+    for (let i = 0; i < amps.length; i++) imag[i + 1] = amps[i];
+    const osc = ctx.createOscillator();
+    osc.setPeriodicWave(ctx.createPeriodicWave(real, imag, { disableNormalization: false }));
+    osc.frequency.value = freq;
+    const gain = ctx.createGain();
+    gain.gain.value = 0.25;
+    osc.connect(gain); gain.connect(analyser);
+    osc.start();
+    debugNodes = { osc, gain };
+  };
+
+  // ---------- service worker ----------
+  if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+    window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}));
+  }
+})();
+</script>
+</body>
+</html>

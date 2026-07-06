@@ -12,3 +12,9 @@ repo's `.git/config`, so no personal info is transmitted):
 Do not use the OS/global git identity for this repo. Do not include any
 personal information (real name, personal email, employer) in commits,
 commit messages, or file contents pushed to this repo.
+
+# Testing
+
+Small, low-risk changes (copy tweaks, CSS, small UI logic) don't need a full
+`node test/pitch.test.mjs` run before committing. If unsure whether a change
+is "small enough" to skip testing, ask rather than assume.

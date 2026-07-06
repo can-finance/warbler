@@ -153,6 +153,20 @@
     font-style: italic; font-size: 14px; color: var(--muted); opacity: 0.85;
   }
 
+  /* ---- mic-denied banner (shown over the idle UI instead of blocking it) ---- */
+  .micBanner {
+    display: none; align-items: center; justify-content: space-between; gap: 12px;
+    font-family: var(--mono); font-size: 13px; color: var(--sharp);
+    background: rgba(192, 95, 60, 0.08); border: 1px solid rgba(192, 95, 60, 0.3);
+    border-radius: 10px; padding: 10px 14px; margin-top: 10px; line-height: 1.4;
+  }
+  #app.mic-blocked .micBanner { display: flex; }
+  .micBanner button {
+    font-family: var(--mono); font-size: 12px; color: var(--sharp); background: none;
+    border: 1px solid rgba(192, 95, 60, 0.4); border-radius: 999px; padding: 5px 14px;
+    cursor: pointer; flex: 0 0 auto;
+  }
+
   /* ---- start overlay ---- */
   #overlay {
     position: fixed; inset: 0; z-index: 10;
@@ -182,7 +196,6 @@
   }
   #start:active { transform: scale(0.97); }
   #overlay .hint { font-size: 14.5px; color: var(--muted); max-width: 320px; line-height: 1.5; }
-  #overlay .err { color: var(--sharp); font-size: 14px; max-width: 320px; line-height: 1.5; display: none; }
 </style>
 </head>
 <body>
@@ -216,6 +229,11 @@
     </div>
   </header>
 
+  <div id="micBanner" class="micBanner">
+    <span id="micBannerText"></span>
+    <button id="micRetry">retry</button>
+  </div>
+
   <section id="stage">
     <div id="hold" title="Held in tune — the warbler landed">
       <svg width="32" height="30" viewBox="0 0 32 30" aria-hidden="true"><use href="#bird"/></svg>
@@ -244,7 +262,6 @@
   <div class="rule"></div>
   <button id="start">Begin listening</button>
   <div class="hint">Warbler needs your microphone — audio is analyzed on your device and never leaves it.</div>
-  <div class="err" id="err"></div>
 </div>
 
 <script src="./pitch.js"></script>
@@ -264,7 +281,7 @@
     hold: document.getElementById('hold'),
     a4out: document.querySelector('#a4out b'),
     overlay: document.getElementById('overlay'),
-    err: document.getElementById('err'),
+    micBannerText: document.getElementById('micBannerText'),
   };
   const IN_TUNE = 5; // cents
   // Gate hysteresis: starting a note demands a clear signal; continuing one
@@ -334,16 +351,17 @@
 
   // ---------- audio ----------
   async function start() {
-    els.err.style.display = 'none';
+    app.classList.remove('mic-blocked');
     try {
       micStream = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
       });
     } catch (e) {
-      els.err.textContent = 'Microphone unavailable: ' + (e && e.name === 'NotAllowedError'
+      els.micBannerText.textContent = 'Microphone unavailable: ' + (e && e.name === 'NotAllowedError'
         ? 'permission was denied. Allow microphone access for this site in your browser settings, then try again.'
         : (e.message || e));
-      els.err.style.display = 'block';
+      app.classList.add('mic-blocked');
+      els.overlay.classList.add('gone');
       return;
     }
     // iOS sometimes ignores constraints passed to getUserMedia; asking the
@@ -366,6 +384,7 @@
     requestAnimationFrame(frame);
   }
   document.getElementById('start').addEventListener('click', start);
+  document.getElementById('micRetry').addEventListener('click', start);
 
   function stop() {
     running = false;

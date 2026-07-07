@@ -310,9 +310,9 @@
     <div class="controls">
       <button id="record"><span class="dot">●</span><span class="recText">record</span></button>
       <button id="stop">main menu</button>
-      <button id="pbPause">⏸ pause</button>
+      <button id="pbPause">❚❚ pause</button>
       <input id="pbSlider" type="range" min="0" max="1000" step="any" value="0" aria-label="Playback position">
-      <button id="pbStop">■ stop playback</button>
+      <button id="pbStop">menu</button>
     </div>
   </footer>
 </div>
@@ -709,7 +709,7 @@
     els.pbSlider.max = String(playDur);
     els.pbSlider.value = '0';
     sliderDragging = false;
-    els.pbPause.textContent = '⏸ pause';
+    els.pbPause.textContent = '❚❚ pause';
     app.classList.add('playing', 'idle');
     els.overlay.classList.add('gone');
     preparePlayable(playbackAudio)
@@ -800,7 +800,7 @@
     if (playbackAudio.paused) {
       if (playbackAudio.ended) seekTo(0);
       playbackAudio.play().catch(() => {});
-      els.pbPause.textContent = '⏸ pause';
+      els.pbPause.textContent = '❚❚ pause';
     } else {
       playbackAudio.pause();
       els.pbPause.textContent = '▶ play';
@@ -811,7 +811,7 @@
     if (!playing) return;
     sliderDragging = true;
     seekTo(Number(els.pbSlider.value));
-    if (playbackAudio.ended === false && playbackAudio.paused === false) els.pbPause.textContent = '⏸ pause';
+    if (playbackAudio.ended === false && playbackAudio.paused === false) els.pbPause.textContent = '❚❚ pause';
   });
   els.pbSlider.addEventListener('change', () => { sliderDragging = false; });
 

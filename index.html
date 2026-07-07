@@ -162,9 +162,6 @@
   #pbStop, #pbPause { display: none; }
   #app.playing #record, #app.playing #stop { display: none; }
   #app.playing #pbStop, #app.playing #pbPause { display: block; }
-  footer .hint {
-    font-style: italic; font-size: 16px; color: var(--muted); opacity: 0.85;
-  }
 
   /* ---- mic-denied banner (shown over the idle UI instead of blocking it) ---- */
   .micBanner {
@@ -317,7 +314,6 @@
       <input id="pbSlider" type="range" min="0" max="1000" step="any" value="0" aria-label="Playback position">
       <button id="pbStop">■ stop playback</button>
     </div>
-    <div class="hint">in tune within ±5 cents · hold a note and the warbler lands</div>
   </footer>
 </div>
 
@@ -390,8 +386,15 @@
   let playing = false, playTrace = [], playIdx = 0, playA4 = 440, playbackURL = null;
   let playDur = 0, sliderDragging = false;
 
-  // Recent raw detections for median smoothing.
+  // Recent accepted detections for median smoothing.
   const recent = [];              // exact midi values, newest last
+  // Transient rejection: a detection far from the running median — or any
+  // detection while the tracker is empty (e.g. a piano hammer attack after
+  // silence) — must repeat consistently before it counts. Random attack
+  // noise never repeats; real note changes confirm in ~50 ms.
+  const JUMP_SEMIS = 5;           // this far from the median is suspect
+  const CONFIRM_FRAMES = 3;       // ...until it persists this many frames
+  const pending = [];             // suspect detections awaiting confirmation
   const history = [];             // { t, midi, inTune } for the trace
   const TRACE_MS = 9000;
   let displayedMidi = null;       // integer midi currently shown
@@ -869,8 +872,29 @@
 
     if (r) {
       const exact = Pitch.freqToMidi(r.frequency, a4);
-      recent.push(exact);
-      if (recent.length > 5) recent.shift();
+      let accepted = false;
+      if (recent.length && Math.abs(exact - median(recent)) <= JUMP_SEMIS) {
+        pending.length = 0;
+        recent.push(exact);
+        if (recent.length > 5) recent.shift();
+        accepted = true;
+      } else {
+        if (pending.length && Math.abs(exact - pending[pending.length - 1]) <= 1) pending.push(exact);
+        else { pending.length = 0; pending.push(exact); }
+        if (pending.length >= CONFIRM_FRAMES) {
+          recent.length = 0;
+          recent.push(...pending);
+          pending.length = 0;
+          accepted = true;
+        }
+      }
+      if (!accepted) {
+        // Suspect frame: hold the current display; don't ink the trace.
+        drawMeter(now);
+        drawTrace(now);
+        requestAnimationFrame(frame);
+        return;
+      }
       const med = median(recent);
       const nearest = Math.round(med);
 
@@ -898,10 +922,11 @@
       const cr = Math.round(cents);
       els.cents.textContent = cr === 0 ? '0' : (cr > 0 ? '+' : '−') + Math.abs(cr);
       els.freq.textContent = r.frequency.toFixed(r.frequency < 1000 ? 2 : 1);
-      history.push({ t: now, midi: exact, inTune });
-      if (recording && recStartAt) recTrace.push({ t: now - recStartAt, midi: exact, inTune });
+      history.push({ t: now, midi: med, inTune });
+      if (recording && recStartAt) recTrace.push({ t: now - recStartAt, midi: med, inTune });
     } else {
       recent.length = 0;
+      pending.length = 0;
       if (now - lastVoiced > 500) {
         app.classList.add('idle');
         app.classList.remove('intune');

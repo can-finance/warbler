@@ -141,8 +141,9 @@
     padding-top: 10px; text-align: center;
     display: flex; flex-direction: column; align-items: center; gap: 8px;
   }
-  footer .controls { display: flex; gap: 10px; }
-  #stop, #record, #pbStop {
+  footer .controls { display: flex; gap: 10px; align-items: center; }
+  #app.playing .controls { width: 100%; max-width: 520px; }
+  #stop, #record, #pbStop, #pbPause {
     font-family: var(--mono); font-size: 16px; letter-spacing: 0.06em;
     color: var(--muted); background: none;
     border: 1px solid rgba(28, 26, 21, 0.3); border-radius: 999px;
@@ -150,13 +151,17 @@
     transition: color .15s, border-color .15s;
   }
   #stop:active, #record:active, #pbStop:active { color: var(--sharp); border-color: var(--sharp); }
+  #pbPause:active { color: var(--gold); border-color: var(--gold); }
+  #pbPause { min-width: 7.5em; }
+  #pbSlider { display: none; flex: 1 1 auto; min-width: 0; accent-color: var(--gold); cursor: pointer; }
+  #app.playing #pbSlider { display: block; }
   #record .dot { color: var(--sharp); margin-right: 7px; }
   #record.rec { color: var(--sharp); border-color: rgba(192, 95, 60, 0.5); }
   #record.rec .dot { animation: recpulse 1.2s ease-in-out infinite; }
   @keyframes recpulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
-  #pbStop { display: none; }
+  #pbStop, #pbPause { display: none; }
   #app.playing #record, #app.playing #stop { display: none; }
-  #app.playing #pbStop { display: block; }
+  #app.playing #pbStop, #app.playing #pbPause { display: block; }
   footer .hint {
     font-style: italic; font-size: 16px; color: var(--muted); opacity: 0.85;
   }
@@ -300,9 +305,16 @@
       <button id="reviewYes">▶ play it back</button>
       <button id="reviewNo">not now</button>
     </div>
+    <div id="keepPrompt" class="micBanner neutral">
+      <span>keep that take?</span>
+      <button id="keepYes">keep it</button>
+      <button id="keepDelete">✕ delete</button>
+    </div>
     <div class="controls">
       <button id="record"><span class="dot">●</span><span class="recText">record</span></button>
       <button id="stop">main menu</button>
+      <button id="pbPause">⏸ pause</button>
+      <input id="pbSlider" type="range" min="0" max="1000" step="any" value="0" aria-label="Playback position">
       <button id="pbStop">■ stop playback</button>
     </div>
     <div class="hint">in tune within ±5 cents · hold a note and the warbler lands</div>
@@ -317,11 +329,6 @@
   <button id="start">Begin listening</button>
   <div class="hint">Warbler needs your microphone — audio is analyzed on your device and never leaves it.</div>
   <div id="overlayNotice" class="micBanner"></div>
-  <div id="keepPrompt" class="micBanner neutral">
-    <span>keep that take?</span>
-    <button id="keepYes">keep it</button>
-    <button id="keepDelete">✕ delete</button>
-  </div>
   <div id="sessions" style="display:none">
     <div class="sessionsHead">recordings</div>
     <ul id="sessionList"></ul>
@@ -352,6 +359,8 @@
     sessionList: document.getElementById('sessionList'),
     record: document.getElementById('record'),
     recText: document.querySelector('#record .recText'),
+    pbPause: document.getElementById('pbPause'),
+    pbSlider: document.getElementById('pbSlider'),
   };
   const IN_TUNE = 5; // cents
   // Gate hysteresis: starting a note demands a clear signal; continuing one
@@ -379,6 +388,7 @@
   // Playback of a saved session.
   const playbackAudio = new Audio();
   let playing = false, playTrace = [], playIdx = 0, playA4 = 440, playbackURL = null;
+  let playDur = 0, sliderDragging = false;
 
   // Recent raw detections for median smoothing.
   const recent = [];              // exact midi values, newest last
@@ -638,6 +648,7 @@
     const id = keepPromptId;
     clearNotices();
     if (!id) return;
+    if (playing) stopPlayback(); // leaving the deleted take's replay
     dbDelete(id).then(renderSessions)
       .catch((e) => showNotice('Could not delete recording: ' + ((e && e.message) || e)));
   });
@@ -691,14 +702,61 @@
     const blob = rec.blob.type ? rec.blob : new Blob([rec.blob], { type: rec.mimeType });
     playbackURL = URL.createObjectURL(blob);
     playbackAudio.src = playbackURL;
+    playDur = rec.duration || (playTrace.length ? playTrace[playTrace.length - 1].t : 0) || 1;
+    els.pbSlider.max = String(playDur);
+    els.pbSlider.value = '0';
+    sliderDragging = false;
+    els.pbPause.textContent = '⏸ pause';
     app.classList.add('playing', 'idle');
     els.overlay.classList.add('gone');
-    playbackAudio.play().then(() => {
-      requestAnimationFrame(playbackFrame);
-    }).catch((e) => {
-      stopPlayback();
-      showNotice('Playback failed: ' + ((e && e.message) || e));
+    preparePlayable(playbackAudio)
+      .then(() => playbackAudio.play())
+      .then(() => requestAnimationFrame(playbackFrame))
+      .catch((e) => {
+        stopPlayback();
+        showNotice('Playback failed: ' + ((e && e.message) || e));
+      });
+  }
+
+  // MediaRecorder webm arrives with Infinity duration and no seek index
+  // (Chrome); seeking to a huge offset forces the browser to build both.
+  function preparePlayable(el) {
+    return new Promise((resolve) => {
+      const onMeta = () => {
+        if (isFinite(el.duration)) { resolve(); return; }
+        el.addEventListener('seeked', function onSeeked() {
+          el.removeEventListener('seeked', onSeeked);
+          el.currentTime = 0;
+          resolve();
+        });
+        el.currentTime = 1e7;
+      };
+      if (el.readyState >= 1) onMeta();
+      else el.addEventListener('loadedmetadata', onMeta, { once: true });
     });
+  }
+
+  // Rebuild the replay state (consumed points, trace window, note display)
+  // for an arbitrary position, then jump the audio there.
+  function seekTo(ms) {
+    ms = Math.max(0, Math.min(playDur, ms));
+    playbackAudio.currentTime = ms / 1000;
+    playIdx = 0;
+    while (playIdx < playTrace.length && playTrace[playIdx].t <= ms) playIdx++;
+    history.length = 0;
+    for (let i = 0; i < playIdx; i++) {
+      if (playTrace[i].t >= ms - TRACE_MS) history.push(playTrace[i]);
+    }
+    const last = playIdx ? playTrace[playIdx - 1] : null;
+    lastVoiced = last ? last.t : -10000;
+    inTuneSince = 0;
+    if (last) {
+      const nearest = Math.round(last.midi);
+      if (nearest !== displayedMidi) { displayedMidi = nearest; renderNote(nearest); }
+      smoothCents = (last.midi - nearest) * 100;
+    }
+    drawMeter(ms);
+    drawTrace(ms);
   }
 
   function stopPlayback() {
@@ -715,20 +773,49 @@
     els.hold.classList.remove('earned');
     meterG.clearRect(0, 0, meterR.width, meterR.height);
     traceG.clearRect(0, 0, traceR.width, traceR.height);
+    reviewingId = 0; keepPromptId = 0;
+    document.getElementById('keepPrompt').style.display = '';
     els.overlay.classList.remove('gone');
-    // After reviewing a fresh take, ask whether it's a keeper.
+  }
+  document.getElementById('pbStop').addEventListener('click', stopPlayback);
+
+  // Natural end: stay on the graph screen, paused at the end, so the take
+  // can be scrubbed or replayed. Fresh review takes get the keeper prompt.
+  playbackAudio.addEventListener('ended', () => {
+    if (!playing) return;
+    els.pbPause.textContent = '▶ play';
+    if (!sliderDragging) els.pbSlider.value = String(playDur);
     if (reviewingId) {
       keepPromptId = reviewingId;
       reviewingId = 0;
       document.getElementById('keepPrompt').style.display = 'flex';
     }
-  }
-  playbackAudio.addEventListener('ended', stopPlayback);
-  document.getElementById('pbStop').addEventListener('click', stopPlayback);
+  });
+
+  els.pbPause.addEventListener('click', () => {
+    if (!playing) return;
+    if (playbackAudio.paused) {
+      if (playbackAudio.ended) seekTo(0);
+      playbackAudio.play().catch(() => {});
+      els.pbPause.textContent = '⏸ pause';
+    } else {
+      playbackAudio.pause();
+      els.pbPause.textContent = '▶ play';
+    }
+  });
+
+  els.pbSlider.addEventListener('input', () => {
+    if (!playing) return;
+    sliderDragging = true;
+    seekTo(Number(els.pbSlider.value));
+    if (playbackAudio.ended === false && playbackAudio.paused === false) els.pbPause.textContent = '⏸ pause';
+  });
+  els.pbSlider.addEventListener('change', () => { sliderDragging = false; });
 
   function playbackFrame() {
     if (!playing) return;
     const ct = playbackAudio.currentTime * 1000;
+    if (!sliderDragging && !playbackAudio.ended) els.pbSlider.value = String(ct);
     while (playIdx < playTrace.length && playTrace[playIdx].t <= ct) {
       const p = playTrace[playIdx++];
       history.push(p);

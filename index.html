@@ -177,6 +177,7 @@
   .micBanner.neutral button:first-of-type { color: var(--gold); border-color: rgba(181, 127, 7, 0.45); }
   #reviewPrompt { display: none; }
   #app.review #reviewPrompt { display: flex; }
+  #keepPrompt #keepDelete { color: var(--sharp); border-color: rgba(192, 95, 60, 0.4); }
   .micBanner button {
     font-family: var(--mono); font-size: 12px; color: var(--sharp); background: none;
     border: 1px solid rgba(192, 95, 60, 0.4); border-radius: 999px; padding: 5px 14px;
@@ -317,6 +318,11 @@
   <button id="start">Begin listening</button>
   <div class="hint">Warbler needs your microphone — audio is analyzed on your device and never leaves it.</div>
   <div id="overlayNotice" class="micBanner"></div>
+  <div id="keepPrompt" class="micBanner neutral">
+    <span>keep that take?</span>
+    <button id="keepYes">keep it</button>
+    <button id="keepDelete">✕ delete</button>
+  </div>
   <div id="sessions" style="display:none">
     <div class="sessionsHead">recordings</div>
     <ul id="sessionList"></ul>
@@ -369,7 +375,7 @@
     return '';
   })();
   let mediaRecorder = null, recChunks = [], recTrace = [], recStartAt = 0, recording = false, recTimerId = 0;
-  let reviewRequested = false, pendingReview = null;
+  let reviewRequested = false, pendingReview = null, reviewingId = 0, keepPromptId = 0;
 
   // Playback of a saved session.
   const playbackAudio = new Audio();
@@ -540,6 +546,8 @@
     app.classList.remove('notice');
     els.micRetry.style.display = '';
     els.overlayNotice.style.display = 'none';
+    keepPromptId = 0;
+    document.getElementById('keepPrompt').style.display = '';
   }
 
   // ---------- recording ----------
@@ -623,7 +631,16 @@
     hideReviewPrompt();
     if (!rec) return;
     if (running) stop();
-    startPlayback(rec);
+    startPlayback(rec, true);
+  });
+
+  document.getElementById('keepYes').addEventListener('click', clearNotices);
+  document.getElementById('keepDelete').addEventListener('click', () => {
+    const id = keepPromptId;
+    clearNotices();
+    if (!id) return;
+    dbDelete(id).then(renderSessions)
+      .catch((e) => showNotice('Could not delete recording: ' + ((e && e.message) || e)));
   });
 
   if (recMime === null) els.record.style.display = 'none';
@@ -661,9 +678,10 @@
   // ---------- playback ----------
   // Replays a session by feeding its recorded trace into the same globals the
   // live path uses, clocked by audio.currentTime (same timebase as trace[i].t).
-  function startPlayback(rec) {
+  function startPlayback(rec, forReview) {
     if (running || playing) return;
     clearNotices();
+    reviewingId = forReview ? rec.id : 0;
     playing = true;
     playTrace = rec.trace || [];
     playIdx = 0;
@@ -699,6 +717,12 @@
     meterG.clearRect(0, 0, meterR.width, meterR.height);
     traceG.clearRect(0, 0, traceR.width, traceR.height);
     els.overlay.classList.remove('gone');
+    // After reviewing a fresh take, ask whether it's a keeper.
+    if (reviewingId) {
+      keepPromptId = reviewingId;
+      reviewingId = 0;
+      document.getElementById('keepPrompt').style.display = 'flex';
+    }
   }
   playbackAudio.addEventListener('ended', stopPlayback);
   document.getElementById('pbStop').addEventListener('click', stopPlayback);

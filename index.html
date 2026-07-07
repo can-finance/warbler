@@ -169,6 +169,14 @@
     border-radius: 10px; padding: 10px 14px; margin-top: 10px; line-height: 1.4;
   }
   #app.mic-blocked .micBanner, #app.notice .micBanner { display: flex; }
+  /* Neutral (non-warning) variant, e.g. the post-recording review prompt. */
+  .micBanner.neutral {
+    color: var(--ink); background: rgba(28, 26, 21, 0.04); border-color: var(--faint);
+  }
+  .micBanner.neutral button { color: var(--muted); border-color: rgba(28, 26, 21, 0.3); }
+  .micBanner.neutral button:first-of-type { color: var(--gold); border-color: rgba(181, 127, 7, 0.45); }
+  #reviewPrompt { display: none; }
+  #app.review #reviewPrompt { display: flex; }
   .micBanner button {
     font-family: var(--mono); font-size: 12px; color: var(--sharp); background: none;
     border: 1px solid rgba(192, 95, 60, 0.4); border-radius: 999px; padding: 5px 14px;
@@ -270,6 +278,12 @@
     <button id="micRetry">retry</button>
   </div>
 
+  <div id="reviewPrompt" class="micBanner neutral">
+    <span>review that take?</span>
+    <button id="reviewYes">▶ play it back</button>
+    <button id="reviewNo">not now</button>
+  </div>
+
   <section id="stage">
     <div id="hold" title="Held in tune — the warbler landed">
       <svg width="32" height="30" viewBox="0 0 32 30" aria-hidden="true"><use href="#bird"/></svg>
@@ -355,6 +369,7 @@
     return '';
   })();
   let mediaRecorder = null, recChunks = [], recTrace = [], recStartAt = 0, recording = false, recTimerId = 0;
+  let reviewRequested = false, pendingReview = null;
 
   // Playback of a saved session.
   const playbackAudio = new Audio();
@@ -456,6 +471,7 @@
     // Finalize before the tracks stop; the recorder's queued onstop then
     // saves the session (the overlay is visible by the time it fires).
     if (recording) stopRecording();
+    hideReviewPrompt();
     running = false;
     if (debugNodes) { debugNodes.osc.stop(); debugNodes.gain.disconnect(); debugNodes = null; }
     if (micStream) { micStream.getTracks().forEach((t) => t.stop()); micStream = null; }
@@ -539,6 +555,7 @@
 
   function startRecording() {
     if (!running || !micStream || recording) return;
+    hideReviewPrompt();
     recChunks = []; recTrace = []; recStartAt = 0;
     try {
       mediaRecorder = recMime
@@ -562,9 +579,10 @@
     }, 1000);
   }
 
-  function stopRecording() {
+  function stopRecording(offerReview) {
     if (!recording) return;
     recording = false;
+    reviewRequested = !!offerReview;
     clearInterval(recTimerId); recTimerId = 0;
     els.record.classList.remove('rec');
     els.recText.textContent = 'record';
@@ -578,15 +596,38 @@
     const mimeType = (mediaRecorder && mediaRecorder.mimeType) || recMime || 'audio/webm';
     const blob = new Blob(recChunks, { type: mimeType });
     const trace = recTrace;
-    recChunks = []; recTrace = []; mediaRecorder = null;
+    const offerReview = reviewRequested;
+    recChunks = []; recTrace = []; mediaRecorder = null; reviewRequested = false;
     if (!blob.size || !recStartAt) return;
-    dbPut({ id: Date.now(), duration, mimeType, a4, blob, trace })
-      .then(renderSessions)
+    const rec = { id: Date.now(), duration, mimeType, a4, blob, trace };
+    dbPut(rec)
+      .then(() => {
+        renderSessions();
+        // Offer a replay only if the tuner is still on screen (the user may
+        // have stopped listening before the recorder finished writing).
+        if (offerReview && running && els.overlay.classList.contains('gone')) {
+          pendingReview = rec;
+          app.classList.add('review');
+        }
+      })
       .catch((e) => showNotice('Could not save recording: ' + ((e && e.message) || e)));
   }
 
+  function hideReviewPrompt() {
+    pendingReview = null;
+    app.classList.remove('review');
+  }
+  document.getElementById('reviewNo').addEventListener('click', hideReviewPrompt);
+  document.getElementById('reviewYes').addEventListener('click', () => {
+    const rec = pendingReview;
+    hideReviewPrompt();
+    if (!rec) return;
+    if (running) stop();
+    startPlayback(rec);
+  });
+
   if (recMime === null) els.record.style.display = 'none';
-  els.record.addEventListener('click', () => { recording ? stopRecording() : startRecording(); });
+  els.record.addEventListener('click', () => { recording ? stopRecording(true) : startRecording(); });
 
   // ---------- saved sessions list ----------
   let sessionCache = new Map();

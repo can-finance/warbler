@@ -3,9 +3,9 @@
   "configurations": [
     {
       "name": "warbler",
-      "runtimeExecutable": "npx",
-      "runtimeArgs": ["-y", "http-server", "-p", "8123", "-c-1", "."],
-      "port": 8123
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "8124", "--bind", "127.0.0.1"],
+      "port": 8124
     }
   ]
 }

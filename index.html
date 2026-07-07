@@ -141,14 +141,22 @@
     padding-top: 10px; text-align: center;
     display: flex; flex-direction: column; align-items: center; gap: 8px;
   }
-  #stop {
+  footer .controls { display: flex; gap: 10px; }
+  #stop, #record, #pbStop {
     font-family: var(--mono); font-size: 14px; letter-spacing: 0.06em;
     color: var(--muted); background: none;
     border: 1px solid rgba(28, 26, 21, 0.3); border-radius: 999px;
     padding: 9px 24px; cursor: pointer;
     transition: color .15s, border-color .15s;
   }
-  #stop:active { color: var(--sharp); border-color: var(--sharp); }
+  #stop:active, #record:active, #pbStop:active { color: var(--sharp); border-color: var(--sharp); }
+  #record .dot { color: var(--sharp); margin-right: 7px; }
+  #record.rec { color: var(--sharp); border-color: rgba(192, 95, 60, 0.5); }
+  #record.rec .dot { animation: recpulse 1.2s ease-in-out infinite; }
+  @keyframes recpulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
+  #pbStop { display: none; }
+  #app.playing #record, #app.playing #stop { display: none; }
+  #app.playing #pbStop { display: block; }
   footer .hint {
     font-style: italic; font-size: 14px; color: var(--muted); opacity: 0.85;
   }
@@ -160,7 +168,7 @@
     background: rgba(192, 95, 60, 0.08); border: 1px solid rgba(192, 95, 60, 0.3);
     border-radius: 10px; padding: 10px 14px; margin-top: 10px; line-height: 1.4;
   }
-  #app.mic-blocked .micBanner { display: flex; }
+  #app.mic-blocked .micBanner, #app.notice .micBanner { display: flex; }
   .micBanner button {
     font-family: var(--mono); font-size: 12px; color: var(--sharp); background: none;
     border: 1px solid rgba(192, 95, 60, 0.4); border-radius: 999px; padding: 5px 14px;
@@ -196,6 +204,34 @@
   }
   #start:active { transform: scale(0.97); }
   #overlay .hint { font-size: 14.5px; color: var(--muted); max-width: 320px; line-height: 1.5; }
+  #overlay .micBanner { max-width: 340px; margin-top: 0; }
+
+  /* ---- saved recordings (on the start overlay) ---- */
+  #sessions {
+    width: min(400px, 86vw);
+    margin-top: 4px; text-align: left;
+    position: relative;
+  }
+  .sessionsHead {
+    font-family: var(--mono); font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--muted); padding-bottom: 6px; border-bottom: 1px solid var(--faint);
+  }
+  #sessionList { list-style: none; max-height: 32vh; overflow-y: auto; }
+  #sessionList li {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 2px; border-bottom: 1px solid var(--faint);
+    font-family: var(--mono); font-size: 13px; color: var(--muted);
+  }
+  #sessionList .when { flex: 1 1 auto; }
+  #sessionList .dur { color: var(--ink); }
+  #sessionList button {
+    width: 32px; height: 32px; border-radius: 50%; flex: 0 0 auto;
+    background: none; border: 1px solid rgba(28, 26, 21, 0.28);
+    color: var(--muted); font-family: var(--mono); font-size: 13px;
+    cursor: pointer; transition: color .15s, border-color .15s;
+  }
+  #sessionList button.play:active { color: var(--gold); border-color: var(--gold); }
+  #sessionList button.del:active { color: var(--sharp); border-color: var(--sharp); }
 </style>
 </head>
 <body>
@@ -250,7 +286,11 @@
   <div id="traceWrap"><canvas id="trace"></canvas></div>
 
   <footer>
-    <button id="stop">■ stop listening</button>
+    <div class="controls">
+      <button id="record"><span class="dot">●</span><span class="recText">record</span></button>
+      <button id="stop">■ stop listening</button>
+      <button id="pbStop">■ stop playback</button>
+    </div>
     <div class="hint">in tune within ±5 cents · hold a note and the warbler lands</div>
   </footer>
 </div>
@@ -262,6 +302,11 @@
   <div class="rule"></div>
   <button id="start">Begin listening</button>
   <div class="hint">Warbler needs your microphone — audio is analyzed on your device and never leaves it.</div>
+  <div id="overlayNotice" class="micBanner"></div>
+  <div id="sessions" style="display:none">
+    <div class="sessionsHead">recordings</div>
+    <ul id="sessionList"></ul>
+  </div>
 </div>
 
 <script src="./pitch.js"></script>
@@ -282,6 +327,12 @@
     a4out: document.querySelector('#a4out b'),
     overlay: document.getElementById('overlay'),
     micBannerText: document.getElementById('micBannerText'),
+    micRetry: document.getElementById('micRetry'),
+    overlayNotice: document.getElementById('overlayNotice'),
+    sessions: document.getElementById('sessions'),
+    sessionList: document.getElementById('sessionList'),
+    record: document.getElementById('record'),
+    recText: document.querySelector('#record .recText'),
   };
   const IN_TUNE = 5; // cents
   // Gate hysteresis: starting a note demands a clear signal; continuing one
@@ -295,6 +346,19 @@
 
   let ctx = null, analyser = null, detector = null, timeBuf = null, micStream = null;
   let debugNodes = null, wakeLock = null, running = false;
+
+  // Recording: MediaRecorder taps micStream alongside the analyser.
+  const recMime = (function () {
+    if (!window.MediaRecorder) return null;
+    const types = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4;codecs=mp4a.40.2', 'audio/mp4'];
+    for (const t of types) { if (MediaRecorder.isTypeSupported(t)) return t; }
+    return '';
+  })();
+  let mediaRecorder = null, recChunks = [], recTrace = [], recStartAt = 0, recording = false, recTimerId = 0;
+
+  // Playback of a saved session.
+  const playbackAudio = new Audio();
+  let playing = false, playTrace = [], playIdx = 0, playA4 = 440, playbackURL = null;
 
   // Recent raw detections for median smoothing.
   const recent = [];              // exact midi values, newest last
@@ -351,6 +415,8 @@
 
   // ---------- audio ----------
   async function start() {
+    if (playing) stopPlayback();
+    clearNotices();
     app.classList.remove('mic-blocked');
     try {
       micStream = await navigator.mediaDevices.getUserMedia({
@@ -387,6 +453,9 @@
   document.getElementById('micRetry').addEventListener('click', start);
 
   function stop() {
+    // Finalize before the tracks stop; the recorder's queued onstop then
+    // saves the session (the overlay is visible by the time it fires).
+    if (recording) stopRecording();
     running = false;
     if (debugNodes) { debugNodes.osc.stop(); debugNodes.gain.disconnect(); debugNodes = null; }
     if (micStream) { micStream.getTracks().forEach((t) => t.stop()); micStream = null; }
@@ -414,6 +483,226 @@
       requestWakeLock();
     }
   });
+
+  // ---------- sessions store (IndexedDB) ----------
+  let dbPromise = null;
+  function dbOpen() {
+    if (!dbPromise) {
+      dbPromise = new Promise((resolve, reject) => {
+        const req = indexedDB.open('warbler', 1);
+        req.onupgradeneeded = () => req.result.createObjectStore('sessions', { keyPath: 'id' });
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
+    }
+    return dbPromise;
+  }
+  function dbTx(mode, fn) {
+    return dbOpen().then((db) => new Promise((resolve, reject) => {
+      const req = fn(db.transaction('sessions', mode).objectStore('sessions'));
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    }));
+  }
+  const dbPut = (rec) => dbTx('readwrite', (s) => s.put(rec));
+  const dbAll = () => dbTx('readonly', (s) => s.getAll());
+  const dbDelete = (id) => dbTx('readwrite', (s) => s.delete(id));
+
+  // Non-mic notices reuse the banner style; shown wherever the user is
+  // (the in-app banner while listening, the overlay otherwise).
+  function showNotice(msg) {
+    if (els.overlay.classList.contains('gone')) {
+      els.micBannerText.textContent = msg;
+      els.micRetry.style.display = 'none';
+      app.classList.add('notice');
+    } else {
+      els.overlayNotice.textContent = msg;
+      els.overlayNotice.style.display = 'flex';
+    }
+  }
+  function clearNotices() {
+    app.classList.remove('notice');
+    els.micRetry.style.display = '';
+    els.overlayNotice.style.display = 'none';
+  }
+
+  // ---------- recording ----------
+  function fmtDur(ms) {
+    const s = Math.max(0, Math.round(ms / 1000));
+    return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+  }
+  function fmtWhen(id) {
+    const d = new Date(id);
+    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ' · ' +
+      d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }).toLowerCase();
+  }
+
+  function startRecording() {
+    if (!running || !micStream || recording) return;
+    recChunks = []; recTrace = []; recStartAt = 0;
+    try {
+      mediaRecorder = recMime
+        ? new MediaRecorder(micStream, { mimeType: recMime })
+        : new MediaRecorder(micStream);
+    } catch (e) {
+      showNotice('Recording unavailable: ' + ((e && e.message) || e));
+      mediaRecorder = null;
+      return;
+    }
+    mediaRecorder.ondataavailable = (e) => { if (e.data && e.data.size) recChunks.push(e.data); };
+    mediaRecorder.onstart = () => { recStartAt = performance.now(); };
+    mediaRecorder.onerror = () => { showNotice('Recording failed.'); stopRecording(); };
+    mediaRecorder.onstop = saveSession;
+    recording = true;
+    mediaRecorder.start(1000); // 1 s timeslice so long takes accrue in chunks
+    els.record.classList.add('rec');
+    els.recText.textContent = '0:00';
+    recTimerId = setInterval(() => {
+      els.recText.textContent = recStartAt ? fmtDur(performance.now() - recStartAt) : '0:00';
+    }, 1000);
+  }
+
+  function stopRecording() {
+    if (!recording) return;
+    recording = false;
+    clearInterval(recTimerId); recTimerId = 0;
+    els.record.classList.remove('rec');
+    els.recText.textContent = 'record';
+    if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+  }
+
+  function saveSession() {
+    const duration = Math.round(performance.now() - recStartAt);
+    // Don't trust container metadata for duration (Chrome's Infinity-duration
+    // webm bug, Safari's unreliable mp4 metadata) — we measured it ourselves.
+    const mimeType = (mediaRecorder && mediaRecorder.mimeType) || recMime || 'audio/webm';
+    const blob = new Blob(recChunks, { type: mimeType });
+    const trace = recTrace;
+    recChunks = []; recTrace = []; mediaRecorder = null;
+    if (!blob.size || !recStartAt) return;
+    dbPut({ id: Date.now(), duration, mimeType, a4, blob, trace })
+      .then(renderSessions)
+      .catch((e) => showNotice('Could not save recording: ' + ((e && e.message) || e)));
+  }
+
+  if (recMime === null) els.record.style.display = 'none';
+  els.record.addEventListener('click', () => { recording ? stopRecording() : startRecording(); });
+
+  // ---------- saved sessions list ----------
+  let sessionCache = new Map();
+  async function renderSessions() {
+    let recs = [];
+    try { recs = await dbAll(); }
+    catch (e) { showNotice('Could not load recordings: ' + ((e && e.message) || e)); }
+    recs.sort((x, y) => y.id - x.id);
+    sessionCache = new Map(recs.map((r) => [r.id, r]));
+    els.sessions.style.display = recs.length ? '' : 'none';
+    els.sessionList.innerHTML = recs.map((r) =>
+      '<li data-id="' + r.id + '"><span class="when">' + fmtWhen(r.id) + '</span>' +
+      '<span class="dur">' + fmtDur(r.duration) + '</span>' +
+      '<button class="play" aria-label="Play">▶</button>' +
+      '<button class="del" aria-label="Delete">✕</button></li>').join('');
+  }
+  els.sessionList.addEventListener('click', (e) => {
+    const li = e.target.closest('li');
+    if (!li) return;
+    const id = Number(li.dataset.id);
+    if (e.target.closest('.del')) {
+      dbDelete(id).then(renderSessions)
+        .catch((err) => showNotice('Could not delete recording: ' + ((err && err.message) || err)));
+    } else if (e.target.closest('.play')) {
+      const rec = sessionCache.get(id);
+      if (rec) startPlayback(rec);
+    }
+  });
+  renderSessions();
+
+  // ---------- playback ----------
+  // Replays a session by feeding its recorded trace into the same globals the
+  // live path uses, clocked by audio.currentTime (same timebase as trace[i].t).
+  function startPlayback(rec) {
+    if (running || playing) return;
+    clearNotices();
+    playing = true;
+    playTrace = rec.trace || [];
+    playIdx = 0;
+    playA4 = rec.a4 || 440;
+    history.length = 0; recent.length = 0;
+    displayedMidi = null; smoothCents = 0; lastVoiced = -10000; inTuneSince = 0;
+    if (playTrace.length) camMidi = playTrace[0].midi;
+    const blob = rec.blob.type ? rec.blob : new Blob([rec.blob], { type: rec.mimeType });
+    playbackURL = URL.createObjectURL(blob);
+    playbackAudio.src = playbackURL;
+    app.classList.add('playing', 'idle');
+    els.overlay.classList.add('gone');
+    playbackAudio.play().then(() => {
+      requestAnimationFrame(playbackFrame);
+    }).catch((e) => {
+      stopPlayback();
+      showNotice('Playback failed: ' + ((e && e.message) || e));
+    });
+  }
+
+  function stopPlayback() {
+    if (!playing) return;
+    playing = false;
+    playbackAudio.pause();
+    playbackAudio.removeAttribute('src');
+    if (playbackURL) { URL.revokeObjectURL(playbackURL); playbackURL = null; }
+    playTrace = []; playIdx = 0;
+    recent.length = 0; history.length = 0;
+    displayedMidi = null; smoothCents = 0; lastVoiced = 0; inTuneSince = 0;
+    app.classList.add('idle');
+    app.classList.remove('intune', 'playing');
+    els.hold.classList.remove('earned');
+    meterG.clearRect(0, 0, meterR.width, meterR.height);
+    traceG.clearRect(0, 0, traceR.width, traceR.height);
+    els.overlay.classList.remove('gone');
+  }
+  playbackAudio.addEventListener('ended', stopPlayback);
+  document.getElementById('pbStop').addEventListener('click', stopPlayback);
+
+  function playbackFrame() {
+    if (!playing) return;
+    const ct = playbackAudio.currentTime * 1000;
+    while (playIdx < playTrace.length && playTrace[playIdx].t <= ct) {
+      const p = playTrace[playIdx++];
+      history.push(p);
+      lastVoiced = p.t;
+      const nearest = Math.round(p.midi);
+      if (nearest !== displayedMidi) {
+        displayedMidi = nearest;
+        smoothCents = (p.midi - nearest) * 100;
+        renderNote(nearest);
+      }
+      const cents = Math.max(-60, Math.min(60, (p.midi - displayedMidi) * 100));
+      smoothCents += (cents - smoothCents) * 0.3;
+      app.classList.toggle('intune', p.inTune);
+      app.classList.remove('idle');
+      if (p.inTune) {
+        if (!inTuneSince) inTuneSince = p.t;
+        els.hold.classList.toggle('earned', p.t - inTuneSince > 1500);
+      } else {
+        inTuneSince = 0;
+        els.hold.classList.remove('earned');
+      }
+      const cr = Math.round(cents);
+      els.cents.textContent = cr === 0 ? '0' : (cr > 0 ? '+' : '−') + Math.abs(cr);
+      const f = Pitch.midiToFreq(p.midi, playA4);
+      els.freq.textContent = f.toFixed(f < 1000 ? 2 : 1);
+    }
+    while (history.length && history[0].t < ct - TRACE_MS) history.shift();
+    if (ct - lastVoiced > 500) {
+      app.classList.add('idle');
+      app.classList.remove('intune');
+      inTuneSince = 0;
+      els.hold.classList.remove('earned');
+      smoothCents += (0 - smoothCents) * 0.08;
+    }
+    drawMeter(ct);
+    drawTrace(ct);
+    requestAnimationFrame(playbackFrame);
+  }
 
   // ---------- per-frame ----------
   function median(arr) {
@@ -459,6 +748,7 @@
       els.cents.textContent = cr === 0 ? '0' : (cr > 0 ? '+' : '−') + Math.abs(cr);
       els.freq.textContent = r.frequency.toFixed(r.frequency < 1000 ? 2 : 1);
       history.push({ t: now, midi: exact, inTune });
+      if (recording && recStartAt) recTrace.push({ t: now - recStartAt, midi: exact, inTune });
     } else {
       recent.length = 0;
       if (now - lastVoiced > 500) {

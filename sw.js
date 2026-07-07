@@ -1,5 +1,5 @@
 /* Warbler service worker: offline-first app shell + cached web fonts. */
-const CACHE = 'warbler-v1';
+const CACHE = 'warbler-v2';
 const SHELL = [
   './',
   './index.html',

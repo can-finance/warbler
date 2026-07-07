@@ -67,26 +67,26 @@
   }
   .wordmark {
     display: flex; align-items: center; gap: 9px;
-    font-size: 16px; letter-spacing: 0.4em; text-transform: uppercase;
+    font-size: 18px; letter-spacing: 0.4em; text-transform: uppercase;
     color: var(--ink); font-weight: 560;
   }
   .wordmark svg { display: block; }
   .a4 {
     display: flex; align-items: center; gap: 2px;
-    font-family: var(--mono); font-size: 15px; color: var(--muted);
+    font-family: var(--mono); font-size: 17px; color: var(--muted);
   }
   .a4 output { color: var(--ink); min-width: 8.5ch; text-align: center; white-space: nowrap; }
   .a4 output b { color: var(--gold); font-weight: 600; }
   .a4 button {
     width: 38px; height: 38px; border-radius: 50%;
     background: none; border: 1px solid rgba(28, 26, 21, 0.28);
-    color: var(--muted); font-family: var(--mono); font-size: 18px;
+    color: var(--muted); font-family: var(--mono); font-size: 20px;
     cursor: pointer; transition: color .15s, border-color .15s;
   }
   .a4 button:active { color: var(--gold); border-color: var(--gold); }
   @media (max-width: 430px) {
-    .wordmark { font-size: 14px; letter-spacing: 0.26em; }
-    .a4 { font-size: 14px; }
+    .wordmark { font-size: 16px; letter-spacing: 0.26em; }
+    .a4 { font-size: 16px; }
   }
 
   /* ---- note stage ---- */
@@ -104,7 +104,7 @@
   }
   #hold.earned { opacity: 1; transform: none; }
   #note {
-    font-size: clamp(96px, 26vh, 150px);
+    font-size: clamp(104px, 28vh, 164px);
     font-weight: 340; line-height: 0.95;
     font-variation-settings: 'opsz' 144;
     display: flex; align-items: baseline;
@@ -117,14 +117,14 @@
   #app.intune #note .acc, #app.intune #note .oct { color: var(--gold); }
   #app.idle #note { opacity: 0.2; }
   #enharm {
-    height: 24px; margin-top: 6px;
-    font-style: italic; font-size: 16px; color: var(--muted);
+    height: 26px; margin-top: 6px;
+    font-style: italic; font-size: 18px; color: var(--muted);
     opacity: 0.9; transition: opacity .3s;
   }
   #app.idle #enharm { opacity: 0; }
   #readouts {
     display: flex; gap: 28px; margin-top: 12px;
-    font-family: var(--mono); font-size: 18px; color: var(--muted);
+    font-family: var(--mono); font-size: 21px; color: var(--muted);
     transition: opacity .4s;
   }
   #readouts b { color: var(--ink); font-weight: 400; }
@@ -143,7 +143,7 @@
   }
   footer .controls { display: flex; gap: 10px; }
   #stop, #record, #pbStop {
-    font-family: var(--mono); font-size: 14px; letter-spacing: 0.06em;
+    font-family: var(--mono); font-size: 16px; letter-spacing: 0.06em;
     color: var(--muted); background: none;
     border: 1px solid rgba(28, 26, 21, 0.3); border-radius: 999px;
     padding: 9px 24px; cursor: pointer;
@@ -158,13 +158,13 @@
   #app.playing #record, #app.playing #stop { display: none; }
   #app.playing #pbStop { display: block; }
   footer .hint {
-    font-style: italic; font-size: 14px; color: var(--muted); opacity: 0.85;
+    font-style: italic; font-size: 16px; color: var(--muted); opacity: 0.85;
   }
 
   /* ---- mic-denied banner (shown over the idle UI instead of blocking it) ---- */
   .micBanner {
     display: none; align-items: center; justify-content: space-between; gap: 12px;
-    font-family: var(--mono); font-size: 13px; color: var(--sharp);
+    font-family: var(--mono); font-size: 15px; color: var(--sharp);
     background: rgba(192, 95, 60, 0.08); border: 1px solid rgba(192, 95, 60, 0.3);
     border-radius: 10px; padding: 10px 14px; margin-top: 10px; line-height: 1.4;
   }
@@ -179,8 +179,8 @@
   #app.review #reviewPrompt { display: flex; }
   #keepPrompt #keepDelete { color: var(--sharp); border-color: rgba(192, 95, 60, 0.4); }
   .micBanner button {
-    font-family: var(--mono); font-size: 12px; color: var(--sharp); background: none;
-    border: 1px solid rgba(192, 95, 60, 0.4); border-radius: 999px; padding: 5px 14px;
+    font-family: var(--mono); font-size: 14px; color: var(--sharp); background: none;
+    border: 1px solid rgba(192, 95, 60, 0.4); border-radius: 999px; padding: 6px 16px;
     cursor: pointer; flex: 0 0 auto;
   }
 
@@ -198,13 +198,13 @@
   }
   #overlay.gone { opacity: 0; pointer-events: none; }
   #overlay h1 {
-    font-size: 44px; font-weight: 340; letter-spacing: 0.02em;
+    font-size: 48px; font-weight: 340; letter-spacing: 0.02em;
     font-variation-settings: 'opsz' 144;
   }
-  #overlay .tag { font-style: italic; color: var(--muted); font-size: 17px; margin-top: -8px; }
+  #overlay .tag { font-style: italic; color: var(--muted); font-size: 19px; margin-top: -8px; }
   #overlay .rule { width: 72px; height: 1px; background: var(--gold); opacity: 0.6; margin: 8px 0; }
   #start {
-    font-family: var(--serif); font-size: 17px; letter-spacing: 0.12em; text-transform: uppercase;
+    font-family: var(--serif); font-size: 19px; letter-spacing: 0.12em; text-transform: uppercase;
     color: var(--ink); background: linear-gradient(160deg, #f7c433, var(--gold-bright));
     border: none; border-radius: 999px; padding: 16px 40px;
     cursor: pointer; font-weight: 560;
@@ -212,7 +212,7 @@
     transition: transform .15s, box-shadow .3s;
   }
   #start:active { transform: scale(0.97); }
-  #overlay .hint { font-size: 14.5px; color: var(--muted); max-width: 320px; line-height: 1.5; }
+  #overlay .hint { font-size: 16.5px; color: var(--muted); max-width: 360px; line-height: 1.5; }
   #overlay .micBanner { max-width: 340px; margin-top: 0; }
 
   /* ---- saved recordings (on the start overlay) ---- */
@@ -222,21 +222,21 @@
     position: relative;
   }
   .sessionsHead {
-    font-family: var(--mono); font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase;
+    font-family: var(--mono); font-size: 14px; letter-spacing: 0.14em; text-transform: uppercase;
     color: var(--muted); padding-bottom: 6px; border-bottom: 1px solid var(--faint);
   }
   #sessionList { list-style: none; max-height: 32vh; overflow-y: auto; }
   #sessionList li {
     display: flex; align-items: center; gap: 10px;
     padding: 8px 2px; border-bottom: 1px solid var(--faint);
-    font-family: var(--mono); font-size: 13px; color: var(--muted);
+    font-family: var(--mono); font-size: 15px; color: var(--muted);
   }
   #sessionList .when { flex: 1 1 auto; }
   #sessionList .dur { color: var(--ink); }
   #sessionList button {
-    width: 32px; height: 32px; border-radius: 50%; flex: 0 0 auto;
+    width: 36px; height: 36px; border-radius: 50%; flex: 0 0 auto;
     background: none; border: 1px solid rgba(28, 26, 21, 0.28);
-    color: var(--muted); font-family: var(--mono); font-size: 13px;
+    color: var(--muted); font-family: var(--mono); font-size: 15px;
     cursor: pointer; transition: color .15s, border-color .15s;
   }
   #sessionList button.play:active { color: var(--gold); border-color: var(--gold); }
@@ -279,12 +279,6 @@
     <button id="micRetry">retry</button>
   </div>
 
-  <div id="reviewPrompt" class="micBanner neutral">
-    <span>review that take?</span>
-    <button id="reviewYes">▶ play it back</button>
-    <button id="reviewNo">not now</button>
-  </div>
-
   <section id="stage">
     <div id="hold" title="Held in tune — the warbler landed">
       <svg width="32" height="30" viewBox="0 0 32 30" aria-hidden="true"><use href="#bird"/></svg>
@@ -301,6 +295,11 @@
   <div id="traceWrap"><canvas id="trace"></canvas></div>
 
   <footer>
+    <div id="reviewPrompt" class="micBanner neutral">
+      <span>review that take?</span>
+      <button id="reviewYes">▶ play it back</button>
+      <button id="reviewNo">not now</button>
+    </div>
     <div class="controls">
       <button id="record"><span class="dot">●</span><span class="recText">record</span></button>
       <button id="stop">main menu</button>
@@ -868,7 +867,7 @@
     g.beginPath(); g.moveTo(x0, base); g.lineTo(x1, base); g.stroke();
 
     // ticks
-    g.font = '12px ' + getCSS('--mono');
+    g.font = '14px ' + getCSS('--mono');
     g.textAlign = 'center';
     for (let c = -50; c <= 50; c += 5) {
       const major = c % 25 === 0;
@@ -919,7 +918,7 @@
     const yOf = (midi) => H / 2 - (midi - camMidi) * pxPerSemi;
 
     // Semitone gridlines with note labels down the left edge.
-    g.font = '12px ' + getCSS('--mono');
+    g.font = '14px ' + getCSS('--mono');
     g.textAlign = 'left'; g.textBaseline = 'middle';
     const lo = Math.floor(camMidi - H / 2 / pxPerSemi), hi = Math.ceil(camMidi + H / 2 / pxPerSemi);
     for (let m = lo; m <= hi; m++) {
